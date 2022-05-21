@@ -1,8 +1,8 @@
 package com.potenciasoftware.rebel
 
+import java.io.InputStream
 import java.lang.Thread.currentThread
 import java.net.URLClassLoader
-import java.io.InputStream
 import scala.collection.mutable.ArrayBuffer
 import scala.reflect.ClassTag
 
@@ -53,17 +53,44 @@ object TestUtils {
       }
   }
 
-  case class RunResults(out: Seq[String], errOut: Seq[String], exitCode: Int)
+  case class RunResults(private val output: Seq[Either[String, String]], exitCode: Int) {
 
+    lazy val out: Seq[String] =
+      output
+        .filter(_.isRight)
+        .map(_.toOption.get)
+
+    lazy val errOut: Seq[String] =
+      output
+        .filter(_.isLeft)
+        .map(_.swap.toOption.get)
+
+    lazy val all: Seq[String] =
+      output
+        .map(_.fold("[Error] " + _, identity))
+  }
+
+  /** In a separate system process, execute a REPL sending it input returning the 
+    * resulting output. This technique is necessary because, for some reason,
+    * instatiating the REPL instance in the same process that is running the
+    * unit tests casuse an exception.
+    * 
+    * @tparam C         The class where [[methodName]] is defined.
+    * @param methodName The name of a 0-arity method which sets up the REPL to
+    *                   test. If the method returns a [[BaseRepl]],
+    *                   [[BaseRepl.run()]] will be called.
+    * @param inputLines All the lines of input to send to the REPL.
+    *                   (Note: including a [[":q"]] line at the end of the input
+    *                   is not necessary.)
+    */
   def replTest[C: ClassTag](methodName: String, inputLines: Iterable[String]): RunResults = {
     import scala.sys.process._
 
     val in = new InputLinesStream(inputLines ++ Seq(":q"))
-    val out = ArrayBuffer.empty[String]
-    val errOut = ArrayBuffer.empty[String]
+    val output = ArrayBuffer.empty[Either[String, String]]
     val logger = ProcessLogger(
-      line => out.append(line),
-      line => errOut.append(line))
+      line => output.append(Right(line)),
+      line => output.append(Left(line)))
 
     val exitCode = Seq("java",
       "-classpath", modifiedTestClasspath mkString ":",
@@ -71,12 +98,21 @@ object TestUtils {
       implicitly[ClassTag[C]].runtimeClass.getName(),
       methodName) #< in !< logger
 
-    RunResults(out.toSeq, errOut.toSeq, exitCode)
+    RunResults(output.toSeq, exitCode)
+  }
+
+  implicit class LinesOps(s: Seq[String]) {
+    def asBlock: String = s.mkString("\n")
   }
 
   def main(args: Array[String]): Unit = {
     val Array(className, methodName) = args
     val cls = Class.forName(className)
-    cls.getMethod(methodName).invoke(cls.newInstance())
+    cls.getMethod(methodName)
+      .invoke(cls.newInstance())
+      .asInstanceOf[BaseRepl] match {
+        case repl: BaseRepl => repl.run()
+        case _ =>
+      }
   }
 }

@@ -17,7 +17,7 @@ inThisBuild(Def.settings(
 
 Global / liveReloadStartMode := Manual
 
-lazy val root = (project in file("."))
+lazy val rebel = (project in file("."))
   .settings(
     name := "rebel",
     libraryDependencies += "org.scala-lang" % "scala-compiler" % scalaVersion.value,
