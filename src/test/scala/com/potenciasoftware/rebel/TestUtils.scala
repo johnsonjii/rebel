@@ -102,7 +102,18 @@ object TestUtils {
   }
 
   implicit class LinesOps(s: Seq[String]) {
+
     def asBlock: String = s.mkString("\n")
+
+    def printAll: Unit = s.foreach(println)
+
+    def withLineNumbers: Seq[String] = {
+      val padTo = (s.size - 1).toString.size
+      for {
+        (l, i) <- s.zipWithIndex
+        n = i.toString.reverse.padTo(padTo, "0").reverse.mkString
+      } yield s"$n: $l"
+    }
   }
 
   def main(args: Array[String]): Unit = {

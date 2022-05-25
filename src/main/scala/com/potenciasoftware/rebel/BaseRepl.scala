@@ -8,10 +8,26 @@ import BaseRepl._
 
 class BaseRepl {
 
-  protected def settings: Settings = new Settings
+  /**
+   * Overwrite to provide alter the settings before starting the REPL.
+   *
+   * Settings is a mutable representation of all compiler options.
+   * For documentation of these options, see:
+   * <pre>scalac -help</pre>
+   *
+   * For instance, the -deprecation flag is [[Settings.deprecation]].
+   * It can be enabled like so:
+   *
+   * {{{
+   * val settings = new Settings
+   * Settings.deprecation.value = true
+   * }}}
+   */
+  protected def updateSettings(settings: Settings): Unit = ()
 
-  private lazy val _settings = {
-    val sets = settings
+  private lazy val settings = {
+    val sets = new Settings
+    updateSettings(sets)
     if (sets.classpath.isDefault)
       sets.classpath.value = sys.props("java.class.path")
     sets
@@ -20,7 +36,7 @@ class BaseRepl {
   /** Override to provide banner text to display at startup. */
   protected val banner: String = WelcomePlaceholder
 
-  protected def config: ShellConfig = ShellConfig(_settings)
+  protected def config: ShellConfig = ShellConfig(settings)
 
   protected def repl: ILoop = new ILoop(config) {
     val _banner = Option(banner).getOrElse(WelcomePlaceholder)
@@ -30,7 +46,7 @@ class BaseRepl {
   }
 
   def run(): Unit = {
-    repl.run(_settings)
+    repl.run(settings)
   }
 }
 
