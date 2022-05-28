@@ -83,7 +83,7 @@ object TestUtils {
     *                   (Note: including a [[":q"]] line at the end of the input
     *                   is not necessary.)
     */
-  def replTest[C: ClassTag](methodName: String, inputLines: Iterable[String]): RunResults = {
+  def replTest[C: ClassTag](methodName: String, inputLines: String*): RunResults = {
     import scala.sys.process._
 
     val in = new InputLinesStream(inputLines ++ Seq(":q"))

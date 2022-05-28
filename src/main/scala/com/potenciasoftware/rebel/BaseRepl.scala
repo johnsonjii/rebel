@@ -1,8 +1,12 @@
 package com.potenciasoftware.rebel
 
+import scala.reflect.ClassTag
+import scala.reflect.runtime.universe.TypeTag
 import scala.tools.nsc.Settings
+import scala.tools.nsc.interpreter.Repl
 import scala.tools.nsc.interpreter.shell.ILoop
 import scala.tools.nsc.interpreter.shell.ShellConfig
+import scala.tools.nsc.typechecker.TypeStrings
 
 import BaseRepl._
 
@@ -36,12 +40,25 @@ class BaseRepl {
   /** Override to provide banner text to display at startup. */
   protected val banner: String = WelcomePlaceholder
 
-  protected def config: ShellConfig = ShellConfig(settings)
+  /**
+   * Override to provide bound values.
+   * These will be available from within the REPL.
+   */
+  protected def boundValues: Seq[Parameter] = Seq()
 
-  protected def repl: ILoop = new ILoop(config) {
+  private lazy val repl: ILoop = new ILoop(ShellConfig(settings)) {
+
     val _banner = Option(banner).getOrElse(WelcomePlaceholder)
     override def welcome: String = {
       _banner.replaceAll(WelcomePlaceholder, super.welcome)
+    }
+
+    override def createInterpreter(interpreterSettings: Settings): Unit = {
+      super.createInterpreter(interpreterSettings)
+      intp.beQuietDuring {
+        for (param <- boundValues)
+          param.bindTo(intp)
+      }
     }
   }
 
@@ -52,4 +69,19 @@ class BaseRepl {
 
 object BaseRepl {
   private val WelcomePlaceholder = "%%%%welcome%%%%"
+
+  class Parameter private (
+    name: String,
+    `type`: String,
+    value: Any,
+    modifiers: List[String]
+  ) {
+    private[BaseRepl] def bindTo(intp: Repl): Unit =
+      intp.bind(name, `type`, value, modifiers)
+  }
+
+  object Parameter {
+    def apply[A: TypeTag: ClassTag](name: String, value: A, modifiers: String*) =
+      new Parameter(name, TypeStrings.fromTag[A], value, modifiers.toList)
+  }
 }
