@@ -1,5 +1,6 @@
 package com.potenciasoftware.rebel
 
+import java.lang.reflect.Field
 import scala.reflect.ClassTag
 import scala.reflect.runtime.universe.TypeTag
 import scala.tools.nsc.Settings
@@ -46,6 +47,29 @@ class BaseRepl {
    */
   protected def boundValues: Seq[Parameter] = Seq()
 
+  // Because ILoop declares 'prompt' to be a lazy val,
+  // we can't just override it or set it directly.
+  // We have to use Java reflection to change it after
+  // the ILoop has been instatiated.
+  private lazy val promptField: Option[Field] =
+    classOf[ILoop]
+      .getDeclaredFields
+      .find(_.getName == "prompt")
+      .map { field =>
+        field.setAccessible(true)
+        field
+      }
+
+  /** Read the current text of the REPL prompt. */
+  def prompt: String = repl.prompt
+
+  /** Change the current text of the REPL prompt. */
+  def prompt_=(newValue: String): Unit = {
+    promptField.foreach { field =>
+      field.set(repl, newValue)
+    }
+  }
+
   private lazy val repl: ILoop = new ILoop(ShellConfig(settings)) {
 
     val _banner = Option(banner).getOrElse(WelcomePlaceholder)
@@ -85,3 +109,4 @@ object BaseRepl {
       new Parameter(name, TypeStrings.fromTag[A], value, modifiers.toList)
   }
 }
+

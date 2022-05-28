@@ -15,7 +15,7 @@ class BaseReplTest extends AnyFlatSpec with Matchers {
 
   def basic() = new TestRepl()
 
-  "BaseRepl" should "behave like the normal ILoop" in {
+  "BaseRepl" should "behave like the normal ILoop by default" in {
     replTest[BaseReplTest]("basic", "42 + 42")
       .out.asBlock shouldBe """
       |scala> val res0: Int = 84
@@ -23,7 +23,7 @@ class BaseReplTest extends AnyFlatSpec with Matchers {
       |scala> """.stripMargin
   }
 
-  it should "have the default compiler options" in {
+  it should "have the standard compiler options by default" in {
     replTest[BaseReplTest]("basic", "def test(): Int = 1", "test").out(3) shouldBe
       "scala> warning: 1 deprecation (since 2.13.3); for details, " +
       "enable `:setting -deprecation` or `:replay -deprecation`"
@@ -37,7 +37,7 @@ class BaseReplTest extends AnyFlatSpec with Matchers {
     }
   }
 
-  it should "set custom compiler options" in {
+  it should "allow custom compiler options to be provided" in {
     replTest[BaseReplTest]("customCompilerOptions", "def test(): Int = 1", "test")
       .out.drop(2).take(3).asBlock shouldBe
       """
@@ -57,22 +57,35 @@ class BaseReplTest extends AnyFlatSpec with Matchers {
     override protected val banner: String = "Custom Banner"
   }
 
-  it should "display a custom banner" in {
+  it should "allow the banner to be customized" in {
     replTest[BaseReplTest]("customBanner")
       .out.takeWhile(_ != "scala> ").asBlock shouldBe "Custom Banner\n"
   }
 
   def boundAnswer() = new TestRepl {
-
     private val Answer: Int = 42
-
     override protected def boundValues: Seq[Parameter] =
       Seq(Parameter("Answer", Answer))
   }
 
-  it should "bind custom variables" in {
+  it should "allow custom values to be bound to the REPL" in {
     replTest[BaseReplTest]("boundAnswer", "println(Answer)")
       .out(1) shouldBe "scala> println(Answer)42"
+  }
+
+  def dynamicPrompt() = new TestRepl {
+    override protected def boundValues: Seq[Parameter] =
+      Seq(Parameter("options", new Options(this)))
+  }
+
+  it should "allow the prompt to be changed dynamically" in {
+    replTest[BaseReplTest]("dynamicPrompt",
+      """options.PS1 = "test> """",
+      """println(s"[${options.PS1}]")"""
+      ).out.take(3).asBlock shouldBe
+    """
+    |scala> // mutated options.PS1
+    |test> println(s"[${options.PS1}]")[test> ]""".stripMargin
   }
 }
 
@@ -82,4 +95,10 @@ object BaseReplTest {
     // Normally we don't need the banner as part of our test outupt
     override protected val banner: String = ""
   }
+
+  class Options(repl: BaseRepl) {
+    def PS1: String = repl.prompt
+    def PS1_=(ps1: String): Unit = { repl.prompt = ps1 }
+  }
 }
+
