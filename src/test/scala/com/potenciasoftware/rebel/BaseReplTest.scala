@@ -1,5 +1,6 @@
 package com.potenciasoftware.rebel
 
+import org.scalatest.Tag
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -17,9 +18,8 @@ class BaseReplTest extends AnyFlatSpec with Matchers {
 
   "BaseRepl" should "behave like the normal ILoop by default" in {
     replTest[BaseReplTest]("basic", "42 + 42")
-      .out.asBlock shouldBe """
-      |scala> val res0: Int = 84
-      |
+      .out.compressed.asBlock shouldBe
+      """scala> val res0: Int = 84
       |scala> """.stripMargin
   }
 
@@ -89,15 +89,39 @@ class BaseReplTest extends AnyFlatSpec with Matchers {
   }
 
   it should "use the full classpath" in {
-    replTest[BaseReplTest]("fullClasspath",
+    replTest[BaseReplTest]("basic",
       "import com.potenciasoftware.rebel.BaseReplTest.TestValue",
       "val value = TestValue(42)",
       "println(value)"
-    ).all.printAll
+    ).out.compressed.take(3).asBlock shouldBe
+    """scala> import com.potenciasoftware.rebel.BaseReplTest.TestValue
+    |scala> val value = TestValue(42)val value: com.potenciasoftware.rebel.BaseReplTest.TestValue = TestValue(42)
+    |scala> println(value)TestValue(42)""".stripMargin
+  }
+
+  def startupScript() = new TestRepl {
+    override protected def startupScript: String =
+      """
+      |object printAnswer {
+      |
+      |  private val answer = 42
+      |
+      |  def apply(): Unit =
+      |    println(s"The answer is: $answer")
+      |}""".stripMargin
+  }
+
+  it should "allow a silent script to run at startup" in {
+    replTest[BaseReplTest]("startupScript",
+      "printAnswer()").out.take(2).asBlock shouldBe
+        """
+        |scala> printAnswer()The answer is: 42""".stripMargin
   }
 }
 
 object BaseReplTest {
+
+  object Focus extends Tag("Focus")
 
   class TestRepl extends BaseRepl {
     // Normally we don't need the banner as part of our test outupt

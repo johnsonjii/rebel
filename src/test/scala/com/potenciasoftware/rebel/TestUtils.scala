@@ -107,6 +107,9 @@ object TestUtils {
 
     def printAll: Unit = s.foreach(println)
 
+    def compressed: Seq[String] =
+      s.filterNot(_.isEmpty)
+
     def withLineNumbers: Seq[String] = {
       val padTo = (s.size - 1).toString.size
       for {

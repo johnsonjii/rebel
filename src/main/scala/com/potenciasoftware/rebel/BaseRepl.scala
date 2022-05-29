@@ -69,12 +69,19 @@ class BaseRepl {
         field
       }
 
+  /**
+   * Override to provide a script to run on startup.
+   *
+   * This can be a multiline string. No output will be shown from this script.
+   */
+  protected def startupScript: String = ""
+
   /** Read the current text of the REPL prompt. */
   def prompt: String = repl.prompt
 
   /** Change the current text of the REPL prompt. */
   def prompt_=(newValue: String): Unit = {
-    promptField.foreach { field =>
+    promptField foreach { field =>
       field.set(repl, newValue)
     }
   }
@@ -91,6 +98,9 @@ class BaseRepl {
       intp.beQuietDuring {
         for (param <- boundValues)
           param.bindTo(intp)
+
+        if (startupScript.nonEmpty)
+          intp.interpret(startupScript)
       }
     }
   }
