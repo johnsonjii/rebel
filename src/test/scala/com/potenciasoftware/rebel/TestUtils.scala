@@ -70,11 +70,11 @@ object TestUtils {
         .map(_.fold("[Error] " + _, identity))
   }
 
-  /** In a separate system process, execute a REPL sending it input returning the 
+  /** In a separate system process, execute a REPL sending it input returning the
     * resulting output. This technique is necessary because, for some reason,
     * instatiating the REPL instance in the same process that is running the
     * unit tests casuse an exception.
-    * 
+    *
     * @tparam C         The class where [[methodName]] is defined.
     * @param methodName The name of a 0-arity method which sets up the REPL to
     *                   test. If the method returns a [[BaseRepl]],
@@ -93,7 +93,7 @@ object TestUtils {
       line => output.append(Left(line)))
 
     val exitCode = Seq("java",
-      "-classpath", modifiedTestClasspath mkString ":",
+      "-classpath", modifiedTestClasspath mkString java.io.File.pathSeparator,
       "com.potenciasoftware.rebel.TestUtils",
       implicitly[ClassTag[C]].runtimeClass.getName(),
       methodName) #< in !< logger

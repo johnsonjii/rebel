@@ -87,6 +87,14 @@ class BaseReplTest extends AnyFlatSpec with Matchers {
     |scala> // mutated options.PS1
     |test> println(s"[${options.PS1}]")[test> ]""".stripMargin
   }
+
+  it should "use the full classpath" in {
+    replTest[BaseReplTest]("fullClasspath",
+      "import com.potenciasoftware.rebel.BaseReplTest.TestValue",
+      "val value = TestValue(42)",
+      "println(value)"
+    ).all.printAll
+  }
 }
 
 object BaseReplTest {
@@ -100,5 +108,7 @@ object BaseReplTest {
     def PS1: String = repl.prompt
     def PS1_=(ps1: String): Unit = { repl.prompt = ps1 }
   }
+
+  case class TestValue(value: Any)
 }
 

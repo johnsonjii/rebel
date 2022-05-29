@@ -1,6 +1,7 @@
 package com.potenciasoftware.rebel
 
 import java.lang.reflect.Field
+import java.net.URLClassLoader
 import scala.reflect.ClassTag
 import scala.reflect.runtime.universe.TypeTag
 import scala.tools.nsc.Settings
@@ -34,7 +35,15 @@ class BaseRepl {
     val sets = new Settings
     updateSettings(sets)
     if (sets.classpath.isDefault)
-      sets.classpath.value = sys.props("java.class.path")
+      Thread.currentThread.getContextClassLoader match {
+        case cl: URLClassLoader =>
+          sets.classpath.value =
+            cl.getURLs
+              .map(_.toString)
+              .distinct
+              .mkString(java.io.File.pathSeparator)
+        case _ => sys.error("classloader is not a URLClassLoader")
+      }
     sets
   }
 
@@ -105,8 +114,15 @@ object BaseRepl {
   }
 
   object Parameter {
-    def apply[A: TypeTag: ClassTag](name: String, value: A, modifiers: String*) =
-      new Parameter(name, TypeStrings.fromTag[A], value, modifiers.toList)
+    def apply[A: TypeTag: ClassTag](
+      name: String,
+      value: A,
+      modifiers: String*
+    ) = new Parameter(
+      name,
+      TypeStrings.fromTag[A],
+      value,
+      modifiers.toList)
   }
 }
 
