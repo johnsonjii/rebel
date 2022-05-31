@@ -1,12 +1,16 @@
 package com.potenciasoftware.rebel
 
+import zio._
+
 import java.lang.reflect.Field
 import java.net.URLClassLoader
 import scala.reflect.ClassTag
 import scala.reflect.runtime.universe.TypeTag
 import scala.tools.nsc.Settings
 import scala.tools.nsc.interpreter.Repl
+import scala.tools.nsc.interpreter.shell.Completion
 import scala.tools.nsc.interpreter.shell.ILoop
+import scala.tools.nsc.interpreter.shell.NoCompletion
 import scala.tools.nsc.interpreter.shell.ShellConfig
 import scala.tools.nsc.typechecker.TypeStrings
 
@@ -54,7 +58,7 @@ class BaseRepl {
    * Override to provide bound values.
    * These will be available from within the REPL.
    */
-  protected def boundValues: Seq[Parameter] = Seq()
+  protected def boundValues: Seq[Parameter] = Seq.empty
 
   // Because ILoop declares 'prompt' to be a lazy val,
   // we can't just override it or set it directly.
@@ -75,6 +79,12 @@ class BaseRepl {
    * This can be a multiline string. No output will be shown from this script.
    */
   protected def startupScript: String = ""
+
+  /** Override to provide additional colon commands to the REPL. */
+  protected def customCommands: Seq[LoopCommand] = Seq.empty
+
+  /** Override to provide logic to execute when quitting the REPL. */
+  def onQuit(): Unit = ()
 
   /** Read the current text of the REPL prompt. */
   def prompt: String = repl.prompt
@@ -103,6 +113,26 @@ class BaseRepl {
           intp.interpret(startupScript)
       }
     }
+
+    private def customQuit(q: LoopCommand): Seq[LoopCommand] =
+      Seq(LoopCommand.cmd(
+        name = q.name,
+        usage = q.usage,
+        help = q.help,
+        f = { line =>
+          delayedAction(5.seconds) { sys.exit() }
+          onQuit()
+          q(line)
+        },
+        completion = q.completion))
+
+    override def commands: List[LoopCommand] = {
+      val (Seq(quitCommand), cmds) =
+        super.commands.partition(_.name == "quit")
+      (cmds ++ customCommands
+        .map(_.convert(LoopCommand.cmd _, Result.apply)))
+        .sortBy(_.name) ++ customQuit(quitCommand)
+    }
   }
 
   def run(): Unit = {
@@ -111,7 +141,36 @@ class BaseRepl {
 }
 
 object BaseRepl {
+
   private val WelcomePlaceholder = "%%%%welcome%%%%"
+
+  private def delayedAction(after: Duration)(action: => Unit): Unit =
+    Runtime.default.unsafeRunAsync {
+      ZIO.attempt(action)
+        .delay(after)
+        .sandbox
+        .catchAll(_ => ZIO.unit)
+    }
+
+  case class LoopCommand(
+    name: String,
+    usage: String,
+    help: String,
+    f: String => LoopCommand.Result,
+    completion: Completion = NoCompletion
+  ) {
+    private[BaseRepl] def convert[A, B](
+      toCommand: (String, String, String, String => B, Completion) => A,
+      toResult: (Boolean, Option[String]) => B
+    ): A =
+      toCommand(name, usage, help,
+      { s => val r = f(s); toResult(r.keepRunning, r.lineToRecord) },
+      completion)
+  }
+
+  object LoopCommand {
+    case class Result(keepRunning: Boolean, lineToRecord: Option[String])
+  }
 
   class Parameter private (
     name: String,

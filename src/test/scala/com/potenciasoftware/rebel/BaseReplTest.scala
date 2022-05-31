@@ -8,7 +8,7 @@ import scala.tools.nsc.Settings
 import scala.tools.nsc.interpreter.shell.ILoop
 import scala.tools.nsc.interpreter.shell.ShellConfig
 
-import BaseRepl.Parameter
+import BaseRepl._
 import BaseReplTest._
 import TestUtils._
 
@@ -116,6 +116,44 @@ class BaseReplTest extends AnyFlatSpec with Matchers {
       "printAnswer()").out.take(2).asBlock shouldBe
         """
         |scala> printAnswer()The answer is: 42""".stripMargin
+  }
+
+  def customCommand() = new TestRepl { repl =>
+    override protected def customCommands: Seq[LoopCommand] =
+      Seq(LoopCommand(
+        "ps1", "<promptText>", "Change the prompt text",
+        { text =>
+          repl.prompt = "\n" + text
+          LoopCommand.Result(true, None)
+        }))
+  }
+
+  it should "allow custom commands" in {
+    replTest[BaseReplTest]("customCommand",
+      ":help ps1", ":ps1 $", "1+1"
+    ).out.map(_.trim).asBlock shouldBe
+    """
+    |scala>
+    |Change the prompt text
+    |
+    |scala>
+    |$val res0: Int = 2
+    |
+    |$""".stripMargin
+  }
+
+  def customQuit() = new TestRepl {
+    override def onQuit(): Unit = {
+      import zio._
+      print("Quitting")
+      // The quit command will only wait 5 seconds before issuing a sys.exit()
+      Thread.sleep(1.minute.toMillis)
+      println("...")
+    }
+  }
+
+  it should "allow custom logic during quit (up to 5 seconds)" in {
+    replTest[BaseReplTest]("customQuit").out(1) shouldBe "scala> Quitting"
   }
 }
 
