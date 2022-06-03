@@ -1,6 +1,5 @@
 package com.potenciasoftware.rebel
 
-import org.scalatest.Tag
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -14,22 +13,26 @@ import TestUtils._
 
 class BaseReplTest extends AnyFlatSpec with Matchers {
 
-  def basic() = new TestRepl()
+  def echo(input: Seq[String]) = new EchoRepl(input)
 
   "BaseRepl" should "behave like the normal ILoop by default" in {
-    replTest[BaseReplTest]("basic", "42 + 42")
+    replTest[BaseReplTest]("echo", "42 + 42")
       .out.compressed.asBlock shouldBe
-      """scala> val res0: Int = 84
+      """scala> 42 + 42
+      |val res0: Int = 84
       |scala> """.stripMargin
   }
 
+  def basic(input: Seq[String]) = new EchoRepl()
+
   it should "have the standard compiler options by default" in {
-    replTest[BaseReplTest]("basic", "def test(): Int = 1", "test").out(3) shouldBe
+    replTest[BaseReplTest]("basic", "def test(): Int = 1", "test")
+      .out(5) shouldBe
       "scala> warning: 1 deprecation (since 2.13.3); for details, " +
       "enable `:setting -deprecation` or `:replay -deprecation`"
   }
 
-  def customCompilerOptions() = new TestRepl {
+  def customCompilerOptions(input: Seq[String]) = new EchoRepl(input) {
     override protected def updateSettings(settings: Settings): Unit = {
       // This Wconf value suppresses the deprecation warning that would normally
       // be shown when a zero arg method is called without the parentheses.
@@ -39,13 +42,14 @@ class BaseReplTest extends AnyFlatSpec with Matchers {
 
   it should "allow custom compiler options to be provided" in {
     replTest[BaseReplTest]("customCompilerOptions", "def test(): Int = 1", "test")
-      .out.drop(2).take(3).asBlock shouldBe
+      .out.drop(4).take(4).asBlock shouldBe
       """
-      |scala> val res0: Int = 1
+      |scala> test
+      |val res0: Int = 1
       |""".stripMargin
   }
 
-  def defaultBanner() = new BaseRepl()
+  def defaultBanner(input: Seq[String]) = new BaseRepl()
 
   it should "display the standard ILoop banner by default" in {
     replTest[BaseReplTest]("defaultBanner")
@@ -53,7 +57,7 @@ class BaseReplTest extends AnyFlatSpec with Matchers {
       s"${new ILoop(ShellConfig(new Settings)).welcome}\n"
   }
 
-  def customBanner() = new BaseRepl() {
+  def customBanner(input: Seq[String]) = new BaseRepl() {
     override protected val banner: String = "Custom Banner"
   }
 
@@ -62,7 +66,7 @@ class BaseReplTest extends AnyFlatSpec with Matchers {
       .out.takeWhile(_ != "scala> ").asBlock shouldBe "Custom Banner\n"
   }
 
-  def boundAnswer() = new TestRepl {
+  def boundAnswer(input: Seq[String]) = new EchoRepl() {
     private val Answer: Int = 42
     override protected def boundValues: Seq[Parameter] =
       Seq(Parameter("Answer", Answer))
@@ -70,10 +74,13 @@ class BaseReplTest extends AnyFlatSpec with Matchers {
 
   it should "allow custom values to be bound to the REPL" in {
     replTest[BaseReplTest]("boundAnswer", "println(Answer)")
-      .out(1) shouldBe "scala> println(Answer)42"
+      .out.drop(1).take(3).asBlock shouldBe
+      """
+      |scala> println(Answer)
+      |42""".stripMargin
   }
 
-  def dynamicPrompt() = new TestRepl {
+  def dynamicPrompt(input: Seq[String]) = new EchoRepl() {
     override protected def boundValues: Seq[Parameter] =
       Seq(Parameter("options", new Options(this)))
   }
@@ -82,10 +89,12 @@ class BaseReplTest extends AnyFlatSpec with Matchers {
     replTest[BaseReplTest]("dynamicPrompt",
       """options.PS1 = "test> """",
       """println(s"[${options.PS1}]")"""
-      ).out.take(3).asBlock shouldBe
+      ).out.drop(1).take(5).trim.asBlock shouldBe
     """
-    |scala> // mutated options.PS1
-    |test> println(s"[${options.PS1}]")[test> ]""".stripMargin
+    |scala>
+    |// mutated options.PS1
+    |test> println(s"[${options.PS1}]")
+    |[test> ]""".stripMargin
   }
 
   it should "use the full classpath" in {
@@ -93,13 +102,15 @@ class BaseReplTest extends AnyFlatSpec with Matchers {
       "import com.potenciasoftware.rebel.BaseReplTest.TestValue",
       "val value = TestValue(42)",
       "println(value)"
-    ).out.compressed.take(3).asBlock shouldBe
-    """scala> import com.potenciasoftware.rebel.BaseReplTest.TestValue
-    |scala> val value = TestValue(42)val value: com.potenciasoftware.rebel.BaseReplTest.TestValue = TestValue(42)
-    |scala> println(value)TestValue(42)""".stripMargin
+    ).out.compressed.drop(1).take(5).asBlock shouldBe
+    """import com.potenciasoftware.rebel.BaseReplTest.TestValue
+    |scala> val value = TestValue(42)
+    |val value: com.potenciasoftware.rebel.BaseReplTest.TestValue = TestValue(42)
+    |scala> println(value)
+    |TestValue(42)""".stripMargin
   }
 
-  def startupScript() = new TestRepl {
+  def startupScript(input: Seq[String]) = new EchoRepl() {
     override protected def startupScript: String =
       """
       |object printAnswer {
@@ -113,12 +124,13 @@ class BaseReplTest extends AnyFlatSpec with Matchers {
 
   it should "allow a silent script to run at startup" in {
     replTest[BaseReplTest]("startupScript",
-      "printAnswer()").out.take(2).asBlock shouldBe
+      "printAnswer()").out.drop(1).take(3).asBlock shouldBe
         """
-        |scala> printAnswer()The answer is: 42""".stripMargin
+        |scala> printAnswer()
+        |The answer is: 42""".stripMargin
   }
 
-  def customCommand() = new TestRepl { repl =>
+  def customCommand(input: Seq[String]) = new EchoRepl(input) { repl =>
     override protected def customCommands: Seq[LoopCommand] =
       Seq(LoopCommand(
         "ps1", "<promptText>", "Change the prompt text",
@@ -131,18 +143,19 @@ class BaseReplTest extends AnyFlatSpec with Matchers {
   it should "allow custom commands" in {
     replTest[BaseReplTest]("customCommand",
       ":help ps1", ":ps1 $", "1+1"
-    ).out.map(_.trim).asBlock shouldBe
+    ).out.drop(1).trim.asBlock shouldBe
     """
     |scala>
     |Change the prompt text
     |
     |scala>
-    |$val res0: Int = 2
+    |$1+1
+    |val res0: Int = 2
     |
     |$""".stripMargin
   }
 
-  def customQuit() = new TestRepl {
+  def customQuit(input: Seq[String]) = new TestRepl {
     override def onQuit(): Unit = {
       import zio._
       print("Quitting")
@@ -155,15 +168,44 @@ class BaseReplTest extends AnyFlatSpec with Matchers {
   it should "allow custom logic during quit (up to 5 seconds)" in {
     replTest[BaseReplTest]("customQuit").out(1) shouldBe "scala> Quitting"
   }
+
+  def executionWrapper(input: Seq[String]) = new TestRepl {
+    override protected val executionWrapper = TestExecutionWrapper
+  }
+
+  it should "allow a custom execution wrapper to be installed" in {
+    replTest[BaseReplTest]("executionWrapper", "val two = 1+1")
+      .out.take(4).trim.asBlock shouldBe
+      """
+      |scala>
+      |// Custom Wrapping Happened
+      |val two: Int = 2""".stripMargin
+  }
 }
 
 object BaseReplTest {
 
-  object Focus extends Tag("Focus")
-
   class TestRepl extends BaseRepl {
-    // Normally we don't need the banner as part of our test outupt
+    // Normally we don't need the banner as part of our test output
     override protected val banner: String = ""
+  }
+
+  class EchoRepl(inputs: Seq[String] = Seq.empty) extends TestRepl {
+    override protected val executionWrapper: ExecutionWrapper = EchoRepl
+    EchoRepl.inputs = ("" +: inputs.filterNot(_ startsWith ":")).iterator
+  }
+
+  object EchoRepl extends ExecutionWrapper {
+
+    override val code: String =
+      "_root_.com.potenciasoftware.rebel.BaseReplTest.EchoRepl.execute"
+
+    private var inputs: Iterator[String] = Iterator.empty
+
+    def execute(a: => Any): String = {
+      println(inputs.nextOption().getOrElse(""))
+      a.toString
+    }
   }
 
   class Options(repl: BaseRepl) {
@@ -172,5 +214,13 @@ object BaseReplTest {
   }
 
   case class TestValue(value: Any)
+
+  object TestExecutionWrapper extends ExecutionWrapper {
+    override val code: String =
+      "_root_.com.potenciasoftware.rebel.BaseReplTest.TestExecutionWrapper.execute"
+    def execute(code: => Any): String = {
+      "\n// Custom Wrapping Happened\n" + code
+    }
+  }
 }
 

@@ -80,6 +80,9 @@ class BaseRepl {
    */
   protected def startupScript: String = ""
 
+  /** Override to provide a custom ExecutionWrapper. */
+  protected val executionWrapper: ExecutionWrapper = ExecutionWrapper.none
+
   /** Override to provide additional colon commands to the REPL. */
   protected def customCommands: Seq[LoopCommand] = Seq.empty
 
@@ -104,7 +107,9 @@ class BaseRepl {
     }
 
     override def createInterpreter(interpreterSettings: Settings): Unit = {
+
       super.createInterpreter(interpreterSettings)
+
       intp.beQuietDuring {
         for (param <- boundValues)
           param.bindTo(intp)
@@ -112,6 +117,8 @@ class BaseRepl {
         if (startupScript.nonEmpty)
           intp.interpret(startupScript)
       }
+
+      intp.setExecutionWrapper(executionWrapper.code)
     }
 
     private def customQuit(q: LoopCommand): Seq[LoopCommand] =

@@ -76,9 +76,11 @@ object TestUtils {
     * unit tests casuse an exception.
     *
     * @tparam C         The class where [[methodName]] is defined.
-    * @param methodName The name of a 0-arity method which sets up the REPL to
-    *                   test. If the method returns a [[BaseRepl]],
-    *                   [[BaseRepl.run()]] will be called.
+    * @param methodName The name of a method with 1 [[Seq[String]] parameter
+    *                   that takes the lines that will be sent to the REPL as
+    *                   inpet and sets up the REPL to test. If the method
+    *                   returns a [[BaseRepl]], [[BaseRepl.run()]]
+    *                   will be called.
     * @param inputLines All the lines of input to send to the REPL.
     *                   (Note: including a [[":q"]] line at the end of the input
     *                   is not necessary.)
@@ -92,11 +94,11 @@ object TestUtils {
       line => output.append(Right(line)),
       line => output.append(Left(line)))
 
-    val exitCode = Seq("java",
+    val exitCode = (Seq("java",
       "-classpath", modifiedTestClasspath mkString java.io.File.pathSeparator,
       "com.potenciasoftware.rebel.TestUtils",
       implicitly[ClassTag[C]].runtimeClass.getName(),
-      methodName) #< in !< logger
+      methodName) ++ inputLines) #< in !< logger
 
     RunResults(output.toSeq, exitCode)
   }
@@ -104,6 +106,8 @@ object TestUtils {
   implicit class LinesOps(s: Seq[String]) {
 
     def asBlock: String = s.mkString("\n")
+
+    def trim: Seq[String] = s.map(_.trim)
 
     def printAll: Unit = s.foreach(println)
 
@@ -120,10 +124,10 @@ object TestUtils {
   }
 
   def main(args: Array[String]): Unit = {
-    val Array(className, methodName) = args
+    val Array(className, methodName, input@_*) = args
     val cls = Class.forName(className)
-    cls.getMethod(methodName)
-      .invoke(cls.newInstance())
+    cls.getMethod(methodName, classOf[Seq[_]])
+      .invoke(cls.newInstance(), input.toSeq)
       .asInstanceOf[BaseRepl] match {
         case repl: BaseRepl => repl.run()
         case _ =>
