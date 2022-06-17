@@ -1,17 +1,15 @@
 package com.potenciasoftware.rebel.executionWrapper
 
-import org.scalamock.function.MockFunction0
 import org.scalamock.scalatest.MockFactory
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import zio._
 
+import ExecuteInFiber.{SIGINT, Idle, Running}
+
 class ExecuteInFiberTest extends AnyFlatSpec with Matchers with MockFactory {
 
   trait PlainExecuteInFiber extends ExecuteInFiber with ResultMapper.Identity
-
-  ExecuteInFiberTest.mockInstallSigInt =
-    mockFunction[Unit]("installSigInt")
 
   def name(member: String = null) =
     Option(member)
@@ -27,27 +25,23 @@ class ExecuteInFiberTest extends AnyFlatSpec with Matchers with MockFactory {
     testExecutor.execute(41) shouldBe "42"
   }
 
-  name("code") should "install the signal handler only once and return the correct command multiple times" in {
-
-    ExecuteInFiberTest.mockInstallSigInt.expects().once()
-
-    ExecuteInFiberTest.code shouldBe
-    "com.potenciasoftware.rebel.executionWrapper.ExecuteInFiberTest.execute"
-
+  name("code") should "return the correct command" in {
     ExecuteInFiberTest.code shouldBe
     "com.potenciasoftware.rebel.executionWrapper.ExecuteInFiberTest.execute"
   }
 
   name("handler") should "call cancel when a fiber is active" in {
 
-    val mockCancel = mockFunction[Unit]("cancel")
+    val mockCancel = mockFunction[Fiber.Runtime[_, _], Unit]("cancel")
     val mockExit = mockFunction[Unit]("exit")
     val testExecutor = new PlainExecuteInFiber {
-      override private[rebel] def cancel(): Unit = mockCancel()
+      override private[executionWrapper] def cancel(
+        fiber: Fiber.Runtime[_, _]
+      ): Unit = mockCancel(fiber)
       override private[rebel] def exit(): Unit = mockExit()
     }
 
-    mockCancel.expects()
+    mockCancel.expects(*)
 
     Runtime.default.unsafeRun {
       for {
@@ -55,22 +49,24 @@ class ExecuteInFiberTest extends AnyFlatSpec with Matchers with MockFactory {
           testExecutor.execute {
             Thread.sleep(10000)
           }
-        }.forkDaemon
+        }.disconnect.fork
         _ <- ZIO.sleep(20.millis)
         _ <- ZIO.attempt {
-          testExecutor.handler.handle(ExecuteInFiber.SIGINT)
+          testExecutor.handler.handle(SIGINT)
         }
-        _ <- f.interruptFork
+        _ <- f.interrupt
       } yield ()
     }
   }
 
   it should "call exit when a no fiber is active" in {
 
-    val mockCancel = mockFunction[Unit]("cancel")
+    val mockCancel = mockFunction[Fiber.Runtime[_, _], Unit]("cancel")
     val mockExit = mockFunction[Unit]("exit")
     val testExecutor = new PlainExecuteInFiber {
-      override private[rebel] def cancel(): Unit = mockCancel()
+      override private[executionWrapper] def cancel(
+        fiber: Fiber.Runtime[_, _]
+      ): Unit = mockCancel(fiber)
       override private[rebel] def exit(): Unit = mockExit()
     }
 
@@ -79,25 +75,35 @@ class ExecuteInFiberTest extends AnyFlatSpec with Matchers with MockFactory {
     Runtime.default.unsafeRun {
       for {
         _ <- ZIO.attempt {
-          testExecutor.handler.handle(ExecuteInFiber.SIGINT)
+          testExecutor.handler.handle(SIGINT)
         }
       } yield ()
     }
   }
 
-  name("execute") should "run in a fiber that is stored in the fiber var during execution" in {
+  name("execute") should "run in a fiber that is stored in the state var during execution" in {
 
-    var isDefinedDuringExecution: Boolean = false
+    val mockInstallSigInt = mockFunction[Unit]("installSigInt")
+    val stateIsRunning = mockFunction[Boolean, Unit]("stateIsRunning")
+    val mockUninstallSigInt = mockFunction[Unit]("uninstallSigInt")
 
-    val testExecutor = new PlainExecuteInFiber {}
+    val testExecutor = new PlainExecuteInFiber {
+      override private[executionWrapper] def installSigInt(): Unit = mockInstallSigInt()
+      override private[executionWrapper] def uninstallSigInt(): Unit = mockUninstallSigInt()
+    }
 
-    testExecutor.fiber.isDefined shouldBe false
+    inSequence {
+      mockInstallSigInt.expects()
+      stateIsRunning.expects(true)
+      mockUninstallSigInt.expects()
+    }
+
+    testExecutor.state shouldBe Idle
     testExecutor.execute {
       Thread.sleep(20)
-      isDefinedDuringExecution = testExecutor.fiber.isDefined
+      stateIsRunning(testExecutor.state.isInstanceOf[Running])
     }
-    testExecutor.fiber.isDefined shouldBe false
-    isDefinedDuringExecution shouldBe true
+    testExecutor.state shouldBe Idle
   }
 
   it should "throw expetions thrown during execution" in {
@@ -114,17 +120,17 @@ class ExecuteInFiberTest extends AnyFlatSpec with Matchers with MockFactory {
 
     val testExecutor = new PlainExecuteInFiber {}
 
-    testExecutor.fiber shouldBe None
+    testExecutor.state shouldBe Idle
     Runtime.default.unsafeRun {
       for {
         f <- ZIO.attempt {
           testExecutor.execute {
-            Thread.sleep(2000)
+            Thread.sleep(10000)
           }
         }.fork
         _ <- ZIO.attempt {
           Thread.sleep(20)
-          testExecutor.cancel()
+          testExecutor.handler.handle(SIGINT)
         }
         r <- f.join
           .catchSome {
@@ -134,22 +140,10 @@ class ExecuteInFiberTest extends AnyFlatSpec with Matchers with MockFactory {
       } yield r
     } match {
       case Left(Cause.Interrupt(_, _)) =>
-        testExecutor.fiber shouldBe None
+        testExecutor.state shouldBe Idle
       case o => fail(s"Expected the fiber to be interrupted. Got $o instead.")
     }
   }
-
-  it should "do nothing when there is no active fiber" in {
-    val testExecutor = new PlainExecuteInFiber {}
-    testExecutor.fiber shouldBe None
-    testExecutor.cancel()
-    testExecutor.fiber shouldBe None
-  }
 }
 
-object ExecuteInFiberTest extends ExecuteInFiber with ResultMapper.Identity {
-
-  var mockInstallSigInt: MockFunction0[Unit] = _
-
-  override def installSigInt(): Unit = mockInstallSigInt()
-}
+object ExecuteInFiberTest extends ExecuteInFiber with ResultMapper.Identity

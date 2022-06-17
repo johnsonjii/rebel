@@ -20,7 +20,7 @@ import BaseRepl._
 class BaseRepl {
 
   /**
-   * Overwrite to provide alter the settings before starting the REPL.
+   * Overwrite to alter the settings before starting the REPL.
    *
    * Settings is a mutable representation of all compiler options.
    * For documentation of these options, see:
@@ -30,8 +30,9 @@ class BaseRepl {
    * It can be enabled like so:
    *
    * {{{
-   * val settings = new Settings
-   * Settings.deprecation.value = true
+   * override protected def updateSettings(settings: Settings): Unit = {
+   *   settings.deprecation.value = true
+   * }
    * }}}
    */
   protected def updateSettings(settings: Settings): Unit = ()
