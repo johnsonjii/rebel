@@ -1,4 +1,4 @@
-package com.potenciasoftware.rebel
+package com.potenciasoftware.rebel.executionWrapper
 
 trait ExecutionWrapper {
 
@@ -38,7 +38,7 @@ trait ExecutionWrapper {
    * }
    * }}}
    */
-  val code: String
+  def code: String
 }
 
 object ExecutionWrapper {

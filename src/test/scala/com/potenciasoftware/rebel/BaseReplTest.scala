@@ -1,5 +1,6 @@
 package com.potenciasoftware.rebel
 
+import com.potenciasoftware.rebel.executionWrapper.ExecutionWrapper
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 

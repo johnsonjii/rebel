@@ -1,5 +1,6 @@
 package com.potenciasoftware.rebel
 
+import com.potenciasoftware.rebel.executionWrapper.ExecutionWrapper
 import zio._
 
 import java.lang.reflect.Field
