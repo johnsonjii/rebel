@@ -26,7 +26,7 @@ class BaseRepl {
    * For documentation of these options, see:
    * <pre>scalac -help</pre>
    *
-   * For instance, the -deprecation flag is [[Settings.deprecation]].
+   * For instance, the -deprecation flag is Settings.deprecation.
    * It can be enabled like so:
    *
    * {{{
