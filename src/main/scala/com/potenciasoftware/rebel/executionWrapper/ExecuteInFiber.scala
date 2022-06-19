@@ -11,7 +11,7 @@ import ExecuteInFiber.{SIGINT, State, Idle, Running}
  * run too long can be killed with Ctrl+C without killing the
  * whole REPL.
  */
-trait ExecuteInFiber extends ExecutionWrapper with ResultMapper {
+trait ExecuteInFiber extends ExecutionWrapper with ResultMapper.Identity {
 
   override val code: String = {
     val cls = getClass()

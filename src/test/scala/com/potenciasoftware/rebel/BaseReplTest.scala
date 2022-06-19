@@ -69,7 +69,7 @@ class BaseReplTest extends AnyFlatSpec with Matchers {
 
   def boundAnswer(input: Seq[String]) = new EchoRepl() {
     private val Answer: Int = 42
-    override protected def boundValues: Seq[Parameter] =
+    override protected val boundValues: Seq[Parameter] =
       Seq(Parameter("Answer", Answer))
   }
 
@@ -82,7 +82,7 @@ class BaseReplTest extends AnyFlatSpec with Matchers {
   }
 
   def dynamicPrompt(input: Seq[String]) = new EchoRepl() {
-    override protected def boundValues: Seq[Parameter] =
+    override protected val boundValues: Seq[Parameter] =
       Seq(Parameter("options", new Options(this)))
   }
 
@@ -112,7 +112,7 @@ class BaseReplTest extends AnyFlatSpec with Matchers {
   }
 
   def startupScript(input: Seq[String]) = new EchoRepl() {
-    override protected def startupScript: String =
+    override protected val startupScript: String =
       """
       |object printAnswer {
       |
@@ -132,7 +132,7 @@ class BaseReplTest extends AnyFlatSpec with Matchers {
   }
 
   def customCommand(input: Seq[String]) = new EchoRepl(input) { repl =>
-    override protected def customCommands: Seq[LoopCommand] =
+    override protected val customCommands: Seq[LoopCommand] =
       Seq(LoopCommand(
         "ps1", "<promptText>", "Change the prompt text",
         { text =>

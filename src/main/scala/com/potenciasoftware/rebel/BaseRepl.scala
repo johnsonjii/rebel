@@ -60,7 +60,7 @@ class BaseRepl {
    * Override to provide bound values.
    * These will be available from within the REPL.
    */
-  protected def boundValues: Seq[Parameter] = Seq.empty
+  protected val boundValues: Seq[Parameter] = Seq.empty
 
   // Because ILoop declares 'prompt' to be a lazy val,
   // we can't just override it or set it directly.
@@ -80,22 +80,22 @@ class BaseRepl {
    *
    * This can be a multiline string. No output will be shown from this script.
    */
-  protected def startupScript: String = ""
+  protected val startupScript: String = ""
 
   /** Override to provide a custom ExecutionWrapper. */
   protected val executionWrapper: ExecutionWrapper = ExecutionWrapper.none
 
   /** Override to provide additional colon commands to the REPL. */
-  protected def customCommands: Seq[LoopCommand] = Seq.empty
+  protected val customCommands: Seq[LoopCommand] = Seq.empty
 
   /** Override to provide logic to execute when quitting the REPL. */
-  def onQuit(): Unit = ()
+  protected def onQuit(): Unit = ()
 
   /** Read the current text of the REPL prompt. */
-  def prompt: String = repl.prompt
+  final def prompt: String = repl.prompt
 
   /** Change the current text of the REPL prompt. */
-  def prompt_=(newValue: String): Unit = {
+  final def prompt_=(newValue: String): Unit = {
     promptField foreach { field =>
       field.set(repl, newValue)
     }
@@ -161,6 +161,18 @@ object BaseRepl {
         .catchAll(_ => ZIO.unit)
     }
 
+  /**
+   * A custom REPL command.
+   *
+   * @param name The command name
+   *             Users will type :<name> to execute this command.
+   * @param usage Additional syntax for calling this command
+   * @param help Documentation about this command
+   * @param f Code to execute when this command is called
+   *          (The String argument contains the command line input
+   *          typed by the user.)
+   * @param completion Support for tab completion
+   */
   case class LoopCommand(
     name: String,
     usage: String,
@@ -181,6 +193,16 @@ object BaseRepl {
     case class Result(keepRunning: Boolean, lineToRecord: Option[String])
   }
 
+  /**
+   * A parameter to bind to the REPL.
+   *
+   * @param name Name of the parameter
+   * @param type Type of the parameter
+   *             E.g. String
+   * @param value Value to bind
+   * @param modifiers Modifiers
+   *                  E.g. implicit
+   */
   class Parameter private (
     name: String,
     `type`: String,
