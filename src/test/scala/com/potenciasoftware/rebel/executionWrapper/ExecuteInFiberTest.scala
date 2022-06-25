@@ -3,6 +3,7 @@ package com.potenciasoftware.rebel.executionWrapper
 import org.scalamock.scalatest.MockFactory
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import zio.Unsafe.unsafe
 import zio._
 
 import ExecuteInFiber.{SIGINT, Idle, Running}
@@ -43,19 +44,21 @@ class ExecuteInFiberTest extends AnyFlatSpec with Matchers with MockFactory {
 
     mockCancel.expects(*)
 
-    Runtime.default.unsafeRun {
-      for {
-        f <- ZIO.attempt {
-          testExecutor.execute {
-            Thread.sleep(10000)
+    unsafe { implicit u =>
+      Runtime.default.unsafe.run {
+        for {
+          f <- ZIO.attempt {
+            testExecutor.execute {
+              Thread.sleep(10000)
+            }
+          }.disconnect.fork
+          _ <- ZIO.sleep(20.millis)
+          _ <- ZIO.attempt {
+            testExecutor.handler.handle(SIGINT)
           }
-        }.disconnect.fork
-        _ <- ZIO.sleep(20.millis)
-        _ <- ZIO.attempt {
-          testExecutor.handler.handle(SIGINT)
-        }
-        _ <- f.interrupt
-      } yield ()
+          _ <- f.interrupt
+        } yield ()
+      }
     }
   }
 
@@ -72,12 +75,14 @@ class ExecuteInFiberTest extends AnyFlatSpec with Matchers with MockFactory {
 
     mockExit.expects()
 
-    Runtime.default.unsafeRun {
-      for {
-        _ <- ZIO.attempt {
-          testExecutor.handler.handle(SIGINT)
-        }
-      } yield ()
+    unsafe { implicit u =>
+      Runtime.default.unsafe.run {
+        for {
+          _ <- ZIO.attempt {
+            testExecutor.handler.handle(SIGINT)
+          }
+        } yield ()
+      }
     }
   }
 
@@ -121,26 +126,25 @@ class ExecuteInFiberTest extends AnyFlatSpec with Matchers with MockFactory {
     val testExecutor = new PlainExecuteInFiber {}
 
     testExecutor.state shouldBe Idle
-    Runtime.default.unsafeRun {
-      for {
-        f <- ZIO.attempt {
-          testExecutor.execute {
-            Thread.sleep(10000)
+    unsafe { implicit u =>
+      Runtime.default.unsafe.run {
+        for {
+          f <- ZIO.attempt {
+            testExecutor.execute {
+              Thread.sleep(10000)
+            }
+          }.fork
+          _ <- ZIO.attempt {
+            Thread.sleep(20)
+            testExecutor.handler.handle(SIGINT)
           }
-        }.fork
-        _ <- ZIO.attempt {
-          Thread.sleep(20)
-          testExecutor.handler.handle(SIGINT)
-        }
-        r <- f.join
-          .catchSome {
-            case FiberFailure(cause) =>
-              ZIO.failCause(cause)
-          }.sandbox.either
-      } yield r
+          r <- f.join
+        } yield r
+      }
     } match {
-      case Left(Cause.Interrupt(_, _)) =>
+      case Exit.Success(result) =>
         testExecutor.state shouldBe Idle
+        result shouldBe "// Interrupted by INT signal (Ctrl-C)"
       case o => fail(s"Expected the fiber to be interrupted. Got $o instead.")
     }
   }

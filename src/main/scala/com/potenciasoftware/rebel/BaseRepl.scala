@@ -1,6 +1,7 @@
 package com.potenciasoftware.rebel
 
 import com.potenciasoftware.rebel.executionWrapper.ExecutionWrapper
+import zio.Unsafe.unsafe
 import zio._
 
 import java.lang.reflect.Field
@@ -154,11 +155,13 @@ object BaseRepl {
   private val WelcomePlaceholder = "%%%%welcome%%%%"
 
   private def delayedAction(after: Duration)(action: => Unit): Unit =
-    Runtime.default.unsafeRunAsync {
-      ZIO.attempt(action)
-        .delay(after)
-        .sandbox
-        .catchAll(_ => ZIO.unit)
+    unsafe { implicit u =>
+      Runtime.default.unsafe.fork {
+        ZIO.attempt(action)
+          .delay(after)
+          .sandbox
+          .catchAll(_ => ZIO.unit)
+      }
     }
 
   /**

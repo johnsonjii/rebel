@@ -2,6 +2,7 @@ package com.potenciasoftware.rebel.executionWrapper
 
 import sun.misc.Signal
 import sun.misc.SignalHandler
+import zio.Unsafe.unsafe
 import zio._
 
 import ExecuteInFiber.{SIGINT, State, Idle, Running}
@@ -22,23 +23,20 @@ trait ExecuteInFiber extends ExecutionWrapper with ResultMapper.Identity {
   }
 
   def execute(a: => Any): String =
-    try Runtime.default.unsafeRun {
+    unsafe { implicit u =>
+      Runtime.default.unsafe.run {
         for {
-          f <- ZIO.attempt(a.toString).sandbox.disconnect.fork
+          f <- ZIO.attempt(a.toString).disconnect.fork
           _ <- runningState(f)
-          result <- f.join
-            .map(mapResult)
-            .ensuring(idleState)
+          result <- f.join.ensuring(idleState)
         } yield result
-    }
-    catch {
-      case FiberFailure(Cause.Fail(cause, _)) =>
-        cause.asInstanceOf[Cause[Throwable]] match {
-          case Cause.Fail(t, _) => throw t
-          case Cause.Die(t, _) => throw t
-          case Cause.Interrupt(_, _) => throw new InterruptedException()
-          case c => throw new Exception(c.prettyPrint)
-        }
+      }
+    } match {
+      case Exit.Success(result) => mapResult(result)
+      case Exit.Failure(cause) => cause.squash match {
+        case t: InterruptedException => "// Interrupted by INT signal (Ctrl-C)"
+        case t => throw t
+      }
     }
 
   private var _state: State = Idle
@@ -59,9 +57,10 @@ trait ExecuteInFiber extends ExecutionWrapper with ResultMapper.Identity {
     }
 
   // exposed for testing
-  private[executionWrapper] def cancel(fiber: Fiber.Runtime[_, _]): Unit = {
-    Runtime.default.unsafeRun(fiber.interrupt)
-  }
+  private[executionWrapper] def cancel(fiber: Fiber.Runtime[_, _]): Unit =
+    unsafe { implicit u =>
+      Runtime.default.unsafe.run(fiber.interrupt)
+    }
 
   // exposed for testing
   private[executionWrapper] def exit(): Unit = { sys.exit() }

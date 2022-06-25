@@ -37,7 +37,7 @@ lazy val rebel = (project in file("."))
   .settings(
     name := "rebel",
     libraryDependencies += "org.scala-lang" % "scala-compiler" % scalaVersion.value,
-    libraryDependencies += "dev.zio" %% "zio" % "2.0.0-RC6",
+    libraryDependencies += "dev.zio" %% "zio" % "2.0.0",
     libraryDependencies += "org.scalatest" %% "scalatest" % "3.2.11" % Test,
     libraryDependencies += "org.scalamock" %% "scalamock" % "5.2.0" % Test,
   )
