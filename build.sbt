@@ -1,6 +1,6 @@
 inThisBuild(Def.settings(
   scalaVersion := "2.13.8",
-  version := "1.0.1-SNAPSHOT",
+  version := "1.0.1",
   versionScheme := Some("early-semver"),
   organization := "com.potenciasoftware",
   organizationName := "potencia",
